@@ -27,7 +27,7 @@ app.add_middleware(
 )
 
 class ExtractRequest(BaseModel):
-    file_base64: str
+    fileBase64: str
     fields: List[str]
 
 # -------- TEXT EXTRACTION --------
@@ -51,7 +51,7 @@ def extract_text(file_bytes: bytes) -> str:
 @app.post("/extract-fields")
 def extract_fields(req: ExtractRequest):
     try:
-        file_bytes = base64.b64decode(req.file_base64)
+        file_bytes = base64.b64decode(req.fileBase64)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid Base64")
 
