@@ -27,7 +27,7 @@ app.add_middleware(
 )
 
 class ExtractRequest(BaseModel):
-    fileBase64: str
+    filesBase64: List[str]
     fields: List[str]
 
 # -------- TEXT EXTRACTION --------
@@ -50,16 +50,21 @@ def extract_text(file_bytes: bytes) -> str:
 # -------- API --------
 @app.post("/extract-fields")
 def extract_fields(req: ExtractRequest):
-    try:
-        file_bytes = base64.b64decode(req.fileBase64)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid Base64")
+    results = []
 
-    document_text = extract_text(file_bytes)
-    if not document_text.strip():
-        return {}
+    for index, file_b64 in enumerate(req.filesBase64):
+        try:
+            file_bytes = base64.b64decode(file_b64)
+        except Exception:
+            results.append({"documentIndex": index})
+            continue
 
-    prompt = f"""
+        document_text = extract_text(file_bytes)
+        if not document_text.strip():
+            results.append({"documentIndex": index})
+            continue
+
+        prompt = f"""
 Extract ONLY the following fields from the document text.
 
 RULES:
@@ -76,17 +81,22 @@ Document:
 {document_text}
 """
 
-    response = client.chat.completions.create(
-        model=DEPLOYMENT,
-        messages=[
-            {"role": "system", "content": "Return STRICT JSON only."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0,
-        response_format={"type": "json_object"}
-    )
+        response = client.chat.completions.create(
+            model=DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": "Return STRICT JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0,
+            response_format={"type": "json_object"}
+        )
 
-    try:
-        return json.loads(response.choices[0].message.content)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Invalid JSON from model")
+        try:
+            extracted = json.loads(response.choices[0].message.content)
+        except Exception:
+            extracted = {}
+
+        extracted["documentIndex"] = index
+        results.append(extracted)
+
+    return results
